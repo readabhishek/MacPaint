@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MacPaint</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23cba6f7'/%3E%3Cstop offset='100%25' stop-color='%2389b4fa'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='12' fill='%231e1e2e'/%3E%3Cpath d='M18 46c1-4 3-6 5-8l16-16c2-2 5-2 7 0l1 1c2 2 2 5 0 7L31 46c-2 2-4 4-8 5l-6 1 1-6z' fill='url(%23g)'/%3E%3Cpath d='M37 20l7 7' stroke='%23f5e0dc' stroke-width='2' fill='none'/%3E%3Ccircle cx='46' cy='14' r='5' fill='%23f38ba8'/%3E%3Ccircle cx='22' cy='44' r='2' fill='%231e1e2e' opacity='0.4'/%3E%3C/svg%3E">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f0f0; color: #333333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; user-select: none; }
+
+  .menu-bar { display: flex; align-items: center; background: #e0e0e0; padding: 4px 12px; gap: 8px; border-bottom: 1px solid #c0c0c0; height: 36px; }
+  .menu-bar .app-title { font-weight: 700; font-size: 14px; color: #cba6f7; margin-right: 12px; }
+  .menu-btn { background: none; border: none; color: #333333; font-size: 12px; padding: 4px 10px; border-radius: 4px; cursor: pointer; }
+  .menu-btn:hover { background: #ffffff; }
+
+  .main-layout { display: flex; flex: 1; overflow: hidden; }
+
+  .toolbar { width: 52px; background: #e0e0e0; border-right: 1px solid #c0c0c0; display: flex; flex-direction: column; align-items: center; padding: 8px 4px; gap: 4px; overflow-y: auto; }
+  .tool-btn { width: 40px; height: 40px; border: 2px solid transparent; border-radius: 8px; background: #f0f0f0; color: #333333; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: all 0.15s; }
+  .tool-btn:hover { background: #ffffff; }
+  .tool-btn.active { border-color: #cba6f7; background: #ffffff; }
+  .tool-btn svg { width: 20px; height: 20px; }
+  .tool-sep { width: 32px; height: 1px; background: #c0c0c0; margin: 4px 0; }
+
+  .props-panel { width: 280px; background: #e0e0e0; border-left: 1px solid #c0c0c0; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  .prop-group { background: #f0f0f0; border-radius: 8px; padding: 10px; }
+  .prop-group h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #666666; margin-bottom: 8px; }
+  .prop-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .prop-row:last-child { margin-bottom: 0; }
+  .prop-row label { font-size: 11px; color: #666666; min-width: 55px; }
+  .prop-row input[type="number"] { width: 60px; background: #ffffff; border: 1px solid #bbb; color: #333333; padding: 3px 6px; border-radius: 4px; font-size: 12px; }
+  .prop-row input[type="range"] { flex: 1; accent-color: #cba6f7; }
+  .prop-row input[type="color"] { width: 32px; height: 24px; border: 1px solid #bbb; border-radius: 4px; cursor: pointer; background: none; padding: 0; }
+  .prop-row select { background: #ffffff; border: 1px solid #bbb; color: #333333; padding: 3px 6px; border-radius: 4px; font-size: 12px; flex: 1; }
+  .prop-row .val { font-size: 11px; color: #333333; min-width: 28px; text-align: right; }
+  .btn-sm { padding: 4px 10px; background: #ffffff; border: 1px solid #bbb; color: #333333; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  .btn-sm:hover { background: #d5d5d5; }
+  .btn-sm.primary { background: #cba6f7; color: #ffffff; border-color: #cba6f7; }
+  .btn-sm.primary:hover { background: #b4befe; }
+
+  .palette { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-top: 6px; }
+  .palette-color { width: 22px; height: 22px; border-radius: 4px; border: 2px solid transparent; cursor: pointer; transition: border-color 0.15s; }
+  .palette-color:hover { border-color: #666666; }
+  .palette-color.active { border-color: #cba6f7; }
+
+  .canvas-area { flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; background: #d0d0d0; position: relative; }
+  .canvas-wrapper { position: relative; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+  #bgCanvas { position: absolute; top: 0; left: 0; display: block; }
+  #drawCanvas { position: absolute; top: 0; left: 0; display: block; }
+  #mainCanvas { display: block; cursor: crosshair; image-rendering: auto; position: relative; z-index: 2; }
+
+  .selection-rect { position: absolute; border: 2px dashed #89b4fa; background: rgba(137,180,250,0.08); pointer-events: none; display: none; z-index: 10; }
+  .selection-rect.active { display: block; }
+
+  .floating-paste { position: absolute; border: 2px dashed #a6e3a1; cursor: move; z-index: 15; image-rendering: auto; }
+  .floating-paste img { display: block; width: 100%; height: 100%; pointer-events: none; }
+
+  .status-bar { height: 28px; background: #e0e0e0; border-top: 1px solid #c0c0c0; display: flex; align-items: center; padding: 0 12px; gap: 16px; font-size: 11px; color: #666666; }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
+  .modal-overlay.active { display: flex; }
+  .modal { background: #f0f0f0; border: 1px solid #c0c0c0; border-radius: 12px; padding: 20px; min-width: 320px; }
+  .modal h2 { font-size: 16px; margin-bottom: 8px; color: #cba6f7; }
+  .modal p.desc { font-size: 12px; color: #666666; margin-bottom: 14px; }
+  .modal .form-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .modal .form-row label { font-size: 12px; min-width: 60px; color: #666666; }
+  .modal .form-row input, .modal .form-row select { flex: 1; background: #ffffff; border: 1px solid #bbb; color: #333333; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .modal-actions .btn-sm { padding: 6px 16px; font-size: 12px; }
+
+  .highlight-cursor { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect width='20' height='20' fill='%23ffff00' opacity='0.4' rx='2'/%3E%3C/svg%3E") 10 10, crosshair; }
+
+  .ctx-menu { position: fixed; background: #f0f0f0; border: 1px solid #c0c0c0; border-radius: 8px; padding: 4px; min-width: 160px; z-index: 999; display: none; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+  .ctx-menu.active { display: block; }
+  .ctx-item { padding: 6px 12px; font-size: 12px; color: #333333; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; }
+  .ctx-item:hover { background: #e0e0e0; }
+  .ctx-item .shortcut { color: #666666; font-size: 11px; }
+
+  .text-input-overlay { position: absolute; display: none; z-index: 20; }
+  .text-input-overlay.active { display: block; }
+  .text-input-overlay textarea { background: rgba(255,255,255,0.85); border: 2px dashed #89b4fa; color: #000; padding: 4px 6px; font-family: sans-serif; outline: none; min-width: 150px; min-height: 30px; resize: both; border-radius: 2px; }
+
+  .color-target-row { display: flex; gap: 4px; margin-bottom: 8px; }
+  .color-target-btn { flex: 1; padding: 4px 4px; font-size: 10px; background: #ffffff; border: 2px solid #bbb; color: #666666; border-radius: 4px; cursor: pointer; text-align: center; }
+  .color-target-btn.active { border-color: #cba6f7; color: #333333; }
+  .swatch-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .swatch-item { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #666666; }
+  .swatch-box { width: 18px; height: 18px; border-radius: 3px; border: 1px solid #bbb; }
+  .btn-sm.disabled, .menu-btn.disabled { opacity: 0.35; pointer-events: none; cursor: default; }
+
+  /* Text formatting toolbar */
+  .text-fmt-row { display: flex; gap: 3px; align-items: center; }
+  .fmt-btn { width: 28px; height: 24px; background: #f0f0f0; border: 1px solid #bbb; color: #333333; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+  .fmt-btn:hover { background: #e0e0e0; }
+  .fmt-btn.active { border-color: #cba6f7; background: #ddd0f7; }
+</style>
+</head>
+<body>
+
+<div class="menu-bar">
+  <span class="app-title">MacPaint</span>
+  <button class="menu-btn" onclick="newCanvas()">New</button>
+  <button class="menu-btn" onclick="openImage()">Open</button>
+  <button class="menu-btn" onclick="showSaveModal()">Save</button>
+  <button class="menu-btn" onclick="undoAction()">Undo</button>
+  <button class="menu-btn" onclick="redoAction()">Redo</button>
+  <button class="menu-btn" onclick="showResizeCanvasModal()">Resize Canvas</button>
+  <button class="menu-btn disabled" id="menuResizeImage" onclick="showResizeImageModal()">Resize Selection</button>
+  <button class="menu-btn" onclick="selectAll()">Select All</button>
+  <button class="menu-btn" onclick="clearCanvas()">Clear</button>
+</div>
+
+<div class="main-layout">
+  <div class="toolbar">
+    <button class="tool-btn active" data-tool="brush" title="Brush (B)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="eraser" title="Eraser (E)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16l10-10 8 8-5 5"/><path d="M6.5 17.5l5-5"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="line" title="Line (L)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="rect" title="Rectangle (R)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="ellipse" title="Ellipse (O)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="8"/></svg>
+    </button>
+    <div class="tool-sep"></div>
+    <button class="tool-btn" data-tool="select" title="Select (S)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"><rect x="3" y="3" width="18" height="18"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="highlight" title="Highlighter (H)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2" fill="rgba(255,255,0,0.3)"/><line x1="9" y1="22" x2="15" y2="22"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="fill" title="Fill (F)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 22l1-1h4l9-9-5-5-9 9v4l-1 1"/><path d="M7 11l5-5"/><path d="M19 15c1.5 1.5 2 3.5 0 5s-3.5.5-5 0"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="eyedropper" title="Eyedropper (I)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 22l1-1 4-4 3 3-4 4-1-1z"/><path d="M7 17L17 7l-3-3"/><circle cx="19" cy="5" r="2"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="text" title="Text (T)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+    </button>
+  </div>
+
+  <div class="canvas-area" id="canvasArea">
+    <div class="canvas-wrapper" id="canvasWrapper">
+      <canvas id="bgCanvas" width="1200" height="800"></canvas>
+      <canvas id="drawCanvas" width="1200" height="800"></canvas>
+      <canvas id="mainCanvas" width="1200" height="800"></canvas>
+      <div class="selection-rect" id="selectionRect"></div>
+      <div class="text-input-overlay" id="textInputOverlay">
+        <textarea id="textInputField" rows="1" placeholder="Type here..."></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="props-panel">
+    <div class="prop-group">
+      <h3>Colors</h3>
+      <div class="color-target-row">
+        <button class="color-target-btn active" id="ctStroke" onclick="setColorTarget('stroke')">Stroke/Border</button>
+        <button class="color-target-btn" id="ctFill" onclick="setColorTarget('fill')">Fill</button>
+        <button class="color-target-btn" id="ctHighlight" onclick="setColorTarget('highlight')">Highlight</button>
+      </div>
+      <div class="prop-row">
+        <label>Color</label>
+        <input type="color" id="activeColorPicker" value="#000000">
+        <div id="activeColorSwatch" style="width:22px;height:22px;border-radius:4px;background:#000000;border:1px solid #bbb;"></div>
+      </div>
+      <div class="swatch-row">
+        <div class="swatch-item"><div class="swatch-box" id="swatchStroke" style="background:#000000;"></div>Stroke</div>
+        <div class="swatch-item"><div class="swatch-box" id="swatchFill" style="background:#89b4fa;"></div>Fill</div>
+        <div class="swatch-item"><div class="swatch-box" id="swatchHighlight" style="background:#ffff00;"></div>Highlight</div>
+      </div>
+      <div class="palette" id="palette"></div>
+    </div>
+
+    <div class="prop-group">
+      <h3>Brush / Eraser</h3>
+      <div class="prop-row"><label>Size</label><input type="range" id="brushSize" min="1" max="80" value="4"><span class="val" id="brushSizeVal">4</span></div>
+      <div class="prop-row"><label>Opacity</label><input type="range" id="brushOpacity" min="1" max="100" value="100"><span class="val" id="brushOpacityVal">100</span></div>
+    </div>
+
+    <div class="prop-group">
+      <h3>Text</h3>
+      <div class="prop-row"><label>Font Size</label><input type="range" id="fontSize" min="8" max="120" value="24"><span class="val" id="fontSizeVal">24</span></div>
+      <div class="prop-row">
+        <label>Style</label>
+        <div class="text-fmt-row">
+          <button class="fmt-btn" id="fmtBold" onclick="toggleFmt('bold')" title="Bold"><b>B</b></button>
+          <button class="fmt-btn" id="fmtItalic" onclick="toggleFmt('italic')" title="Italic"><i>I</i></button>
+          <button class="fmt-btn" id="fmtStrike" onclick="toggleFmt('strike')" title="Strikethrough"><s>S</s></button>
+        </div>
+      </div>
+      <div class="prop-row"><label>Font</label><select id="fontFamily"><option value="sans-serif">Sans-serif</option><option value="serif">Serif</option><option value="monospace">Monospace</option><option value="cursive">Cursive</option><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Courier New">Courier New</option><option value="Times New Roman">Times New Roman</option></select></div>
+    </div>
+
+    <div class="prop-group">
+      <h3>Shape / Border</h3>
+      <div class="prop-row"><label>Thickness</label><input type="range" id="shapeStroke" min="1" max="30" value="3"><span class="val" id="shapeStrokeVal">3</span></div>
+      <div class="prop-row"><label>Shape Fill</label><select id="shapeFill"><option value="none">No Fill</option><option value="fill">Solid Fill</option></select></div>
+    </div>
+
+    <div class="prop-group">
+      <h3>Highlight</h3>
+      <div class="prop-row"><label>Size</label><input type="range" id="highlightSize" min="5" max="60" value="20"><span class="val" id="highlightSizeVal">20</span></div>
+      <div class="prop-row"><label>Opacity</label><input type="range" id="highlightOpacity" min="10" max="80" value="35"><span class="val" id="highlightOpacityVal">35</span></div>
+    </div>
+
+    <div class="prop-group">
+      <h3>Canvas</h3>
+      <div class="prop-row"><label>W</label><input type="number" id="canvasW" value="1200" min="1" max="8000"><label>H</label><input type="number" id="canvasH" value="800" min="1" max="8000"></div>
+      <div class="prop-row"><button class="btn-sm" onclick="applyCanvasResize()">Resize Canvas</button></div>
+    </div>
+
+    <div class="prop-group">
+      <h3>Selection</h3>
+      <div class="prop-row" style="flex-wrap:wrap;gap:4px;">
+        <button class="btn-sm" onclick="copySelection()">Copy</button>
+        <button class="btn-sm" onclick="cutSelection()">Cut</button>
+        <button class="btn-sm" onclick="pasteClipboard()">Paste</button>
+        <button class="btn-sm" onclick="deleteSelection()">Delete</button>
+      </div>
+      <div class="prop-row" style="flex-wrap:wrap;gap:4px;margin-top:4px;">
+        <button class="btn-sm" onclick="addBorderRect()">Rect Border</button>
+        <button class="btn-sm" onclick="addBorderEllipse()">Circle Border</button>
+      </div>
+      <div class="prop-row" style="margin-top:4px;">
+        <button class="btn-sm primary" id="panelResizeSel" onclick="showResizeImageModal()">Resize Selection</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <span id="statusTool">Brush</span>
+  <span id="statusPos">0, 0</span>
+  <span id="statusSize">1200 × 800</span>
+  <span id="statusSelection" style="display:none;"></span>
+</div>
+
+<!-- Resize Canvas Modal -->
+<div class="modal-overlay" id="resizeCanvasModal">
+  <div class="modal">
+    <h2>Resize Canvas</h2>
+    <p class="desc">Extends or crops the canvas without scaling image content.</p>
+    <div class="form-row"><label>Width (px)</label><input type="number" id="rcW" value="1200" min="1" max="8000"></div>
+    <div class="form-row"><label>Height (px)</label><input type="number" id="rcH" value="800" min="1" max="8000"></div>
+    <div class="modal-actions"><button class="btn-sm" onclick="closeModal('resizeCanvasModal')">Cancel</button><button class="btn-sm primary" onclick="doResizeCanvas()">Apply</button></div>
+  </div>
+</div>
+
+<!-- Resize Image Modal -->
+<div class="modal-overlay" id="resizeImageModal">
+  <div class="modal">
+    <h2>Resize Selection</h2>
+    <p class="desc">Scales the selected region to new dimensions (high quality).</p>
+    <div class="form-row"><label>Current</label><input type="text" id="riCurrent" disabled style="opacity:0.6;"></div>
+    <div class="form-row"><label>New W (px)</label><input type="number" id="riW" value="100" min="1" max="8000"></div>
+    <div class="form-row"><label>New H (px)</label><input type="number" id="riH" value="100" min="1" max="8000"></div>
+    <div class="modal-actions"><button class="btn-sm" onclick="closeModal('resizeImageModal')">Cancel</button><button class="btn-sm primary" onclick="doResizeSelection()">Apply</button></div>
+  </div>
+</div>
+
+<!-- Save Modal -->
+<div class="modal-overlay" id="saveModal">
+  <div class="modal">
+    <h2>Save Image</h2>
+    <p class="desc">Choose a file name and format to download.</p>
+    <div class="form-row"><label>Name</label><input type="text" id="saveFileName" value="macpaint-image"></div>
+    <div class="form-row"><label>Format</label><select id="saveFormat"><option value="png">PNG</option><option value="jpg">JPG</option><option value="pdf">PDF</option></select></div>
+    <div class="form-row" id="jpgQualityRow" style="display:none;"><label>Quality</label><input type="range" id="jpgQuality" min="10" max="100" value="92" style="flex:1;accent-color:#cba6f7;"><span style="font-size:12px;color:#cdd6f4;min-width:28px;text-align:right;" id="jpgQualityVal">92</span></div>
+    <div class="modal-actions"><button class="btn-sm" onclick="closeModal('saveModal')">Cancel</button><button class="btn-sm primary" onclick="doSave()">Save</button></div>
+  </div>
+</div>
+
+<!-- Context Menu -->
+<div class="ctx-menu" id="ctxMenu">
+  <div class="ctx-item" onclick="copySelection()">Copy <span class="shortcut">Ctrl+C</span></div>
+  <div class="ctx-item" onclick="cutSelection()">Cut <span class="shortcut">Ctrl+X</span></div>
+  <div class="ctx-item" onclick="pasteClipboard()">Paste <span class="shortcut">Ctrl+V</span></div>
+  <div class="ctx-item" onclick="deleteSelection()">Delete <span class="shortcut">Del</span></div>
+  <div class="ctx-item" onclick="selectAll()">Select All <span class="shortcut">Ctrl+A</span></div>
+  <div class="ctx-item" onclick="addBorderRect()">Add Rect Border</div>
+  <div class="ctx-item" onclick="addBorderEllipse()">Add Circle Border</div>
+</div>
+
+<input type="file" id="fileInput" accept="image/*" style="display:none">
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  THREE-LAYER ARCHITECTURE
+//  bgCanvas:   background layer (opened/pasted base images, white default)
+//  drawCanvas: user drawing layer (brush, shapes, text, highlights)
+//  mainCanvas: composite display (bg + draw), what user sees
+//  Eraser: uses destination-out on drawCanvas → reveals bg underneath
+// ═══════════════════════════════════════════════════════════════════
+
+const bgCanvas = document.getElementById('bgCanvas');
+const bgCtx = bgCanvas.getContext('2d', { willReadFrequently: true });
+const drawCanvas = document.getElementById('drawCanvas');
+const drawCtx = drawCanvas.getContext('2d', { willReadFrequently: true });
+const mainCanvas = document.getElementById('mainCanvas');
+const mainCtx = mainCanvas.getContext('2d', { willReadFrequently: true });
+const selRect = document.getElementById('selectionRect');
+
+let currentTool = 'brush';
+let isDrawing = false;
+let startX = 0, startY = 0;
+let undoStack = [], redoStack = [];
+const MAX_UNDO = 40;
+
+let selection = { active: false, x: 0, y: 0, w: 0, h: 0 };
+let selectionData = null;
+
+// Floating paste
+let floatingEl = null, floatingImg = null;
+let floatingX = 0, floatingY = 0;
+let floatingDragging = false, floatingDragOfsX = 0, floatingDragOfsY = 0;
+
+// Unified color system
+let colors = { stroke: '#000000', fill: '#89b4fa', highlight: '#ffff00' };
+let colorTarget = 'stroke';
+
+// ─── Init ─────────────────────────────────────────────────────────
+function init() {
+  bgCtx.fillStyle = '#ffffff';
+  bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+  drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  composite();
+  saveState();
+  buildPalette();
+  bindEvents();
+  updateStatus();
+  syncColorUI();
+}
+
+function composite() {
+  mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+  mainCtx.drawImage(bgCanvas, 0, 0);
+  mainCtx.drawImage(drawCanvas, 0, 0);
+}
+
+// ─── Color System ─────────────────────────────────────────────────
+function setColorTarget(t) {
+  colorTarget = t;
+  document.querySelectorAll('.color-target-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('ct' + t.charAt(0).toUpperCase() + t.slice(1)).classList.add('active');
+  syncColorUI();
+}
+function syncColorUI() {
+  document.getElementById('activeColorPicker').value = colors[colorTarget];
+  document.getElementById('activeColorSwatch').style.background = colors[colorTarget];
+  document.getElementById('swatchStroke').style.background = colors.stroke;
+  document.getElementById('swatchFill').style.background = colors.fill;
+  document.getElementById('swatchHighlight').style.background = colors.highlight;
+}
+document.getElementById('activeColorPicker').addEventListener('input', e => {
+  colors[colorTarget] = e.target.value;
+  document.getElementById('activeColorSwatch').style.background = e.target.value;
+  document.getElementById('swatch' + colorTarget.charAt(0).toUpperCase() + colorTarget.slice(1)).style.background = e.target.value;
+});
+
+const COLORS = [
+  '#000000','#333333','#555555','#777777','#999999','#cccccc','#ffffff',
+  '#ff0000','#ff5722','#ff9800','#ffeb3b','#8bc34a','#4caf50','#009688',
+  '#00bcd4','#2196f3','#3f51b5','#673ab7','#9c27b0','#e91e63','#f44336',
+  '#795548','#607d8b','#ff6f00','#aeea00','#00e5ff','#d500f9','#ff1744','#76ff03'
+];
+function buildPalette() {
+  const pal = document.getElementById('palette');
+  COLORS.forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'palette-color';
+    d.style.background = c;
+    d.onclick = () => {
+      colors[colorTarget] = c;
+      syncColorUI();
+      document.querySelectorAll('.palette-color').forEach(x => x.classList.remove('active'));
+      d.classList.add('active');
+    };
+    pal.appendChild(d);
+  });
+}
+
+// ─── Undo / Redo ──────────────────────────────────────────────────
+function saveState() {
+  if (undoStack.length >= MAX_UNDO) undoStack.shift();
+  undoStack.push({ bg: bgCanvas.toDataURL(), draw: drawCanvas.toDataURL() });
+  redoStack = [];
+}
+function undoAction() {
+  if (undoStack.length <= 1) return;
+  redoStack.push(undoStack.pop());
+  restoreState(undoStack[undoStack.length - 1]);
+}
+function redoAction() {
+  if (!redoStack.length) return;
+  const s = redoStack.pop(); undoStack.push(s); restoreState(s);
+}
+function restoreState(st) {
+  let n = 0;
+  const done = () => { n++; if (n === 2) composite(); };
+  const i1 = new Image(); i1.onload = () => { bgCtx.clearRect(0,0,bgCanvas.width,bgCanvas.height); bgCtx.drawImage(i1,0,0); done(); }; i1.src = st.bg;
+  const i2 = new Image(); i2.onload = () => { drawCtx.clearRect(0,0,drawCanvas.width,drawCanvas.height); drawCtx.drawImage(i2,0,0); done(); }; i2.src = st.draw;
+}
+
+// ─── Tool Selection ───────────────────────────────────────────────
+document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    commitTextInput();
+    currentTool = btn.dataset.tool;
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    mainCanvas.classList.remove('highlight-cursor');
+    if (currentTool === 'highlight') mainCanvas.classList.add('highlight-cursor');
+    if (currentTool !== 'select') clearSelection();
+    updateStatus();
+  });
+});
+
+// ─── Canvas Events ────────────────────────────────────────────────
+function getPos(e) {
+  const r = mainCanvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * (mainCanvas.width / r.width), y: (e.clientY - r.top) * (mainCanvas.height / r.height) };
+}
+
+mainCanvas.addEventListener('mousedown', e => {
+  if (e.button === 2) return;
+  const p = getPos(e);
+  hideCtxMenu();
+  if (floatingEl && !floatingDragging) commitFloatingPaste();
+
+  isDrawing = true;
+  startX = p.x; startY = p.y;
+
+  if (currentTool === 'brush' || currentTool === 'eraser' || currentTool === 'highlight') {
+    drawCtx.save();
+    drawCtx.beginPath();
+    drawCtx.moveTo(p.x, p.y);
+    drawCtx.lineCap = 'round';
+    drawCtx.lineJoin = 'round';
+    if (currentTool === 'eraser') {
+      drawCtx.globalCompositeOperation = 'destination-out';
+      drawCtx.strokeStyle = 'rgba(0,0,0,1)';
+      drawCtx.lineWidth = getVal('brushSize');
+    } else if (currentTool === 'highlight') {
+      drawCtx.globalCompositeOperation = 'source-over';
+      drawCtx.strokeStyle = colors.highlight;
+      drawCtx.lineWidth = getVal('highlightSize');
+      drawCtx.globalAlpha = getVal('highlightOpacity') / 100;
+    } else {
+      drawCtx.globalCompositeOperation = 'source-over';
+      drawCtx.strokeStyle = colors.stroke;
+      drawCtx.lineWidth = getVal('brushSize');
+      drawCtx.globalAlpha = getVal('brushOpacity') / 100;
+    }
+    drawCtx.lineTo(p.x + 0.1, p.y + 0.1);
+    drawCtx.stroke();
+    composite();
+  }
+  if (currentTool === 'select') clearSelection();
+  if (currentTool === 'fill') { floodFill(Math.round(p.x), Math.round(p.y), colors.fill); saveState(); isDrawing = false; }
+  if (currentTool === 'eyedropper') { pickColor(Math.round(p.x), Math.round(p.y)); isDrawing = false; }
+  if (currentTool === 'text') { isDrawing = false; showTextInput(p.x, p.y); }
+});
+
+mainCanvas.addEventListener('mousemove', e => {
+  const p = getPos(e);
+  document.getElementById('statusPos').textContent = `${Math.round(p.x)}, ${Math.round(p.y)}`;
+  if (!isDrawing) return;
+  if (currentTool === 'brush' || currentTool === 'eraser' || currentTool === 'highlight') {
+    drawCtx.lineTo(p.x, p.y); drawCtx.stroke(); composite();
+  }
+  if (currentTool === 'line' || currentTool === 'rect' || currentTool === 'ellipse') {
+    composite();
+    shapeOnCtx(mainCtx, startX, startY, p.x, p.y, currentTool, 0.7);
+  }
+  if (currentTool === 'select') {
+    selection = { active: true, x: Math.min(startX,p.x), y: Math.min(startY,p.y), w: Math.abs(p.x-startX), h: Math.abs(p.y-startY) };
+    updateSelectionUI();
+  }
+});
+
+mainCanvas.addEventListener('mouseup', e => {
+  if (!isDrawing) return;
+  const p = getPos(e); isDrawing = false;
+  if (currentTool === 'brush' || currentTool === 'eraser' || currentTool === 'highlight') {
+    drawCtx.restore(); composite(); saveState();
+  }
+  if (currentTool === 'line' || currentTool === 'rect' || currentTool === 'ellipse') {
+    shapeOnCtx(drawCtx, startX, startY, p.x, p.y, currentTool, 1.0);
+    composite(); saveState();
+  }
+  if (currentTool === 'select' && selection.active) {
+    document.getElementById('statusSelection').style.display = 'inline';
+    document.getElementById('statusSelection').textContent = `Sel: ${Math.round(selection.w)}×${Math.round(selection.h)}`;
+    updateResizeSelBtns();
+  }
+});
+
+mainCanvas.addEventListener('mouseleave', () => {
+  if (isDrawing && (currentTool === 'brush' || currentTool === 'eraser' || currentTool === 'highlight')) {
+    drawCtx.restore(); composite(); saveState(); isDrawing = false;
+  }
+});
+
+// ─── Shape Drawing ────────────────────────────────────────────────
+function shapeOnCtx(c, x1, y1, x2, y2, shape, alpha) {
+  const fillMode = document.getElementById('shapeFill').value;
+  c.save();
+  c.strokeStyle = colors.stroke;
+  c.lineWidth = getVal('shapeStroke');
+  c.fillStyle = colors.fill;
+  c.globalAlpha = alpha;
+  if (shape === 'line') { c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); c.stroke(); }
+  else if (shape === 'rect') { if (fillMode==='fill') c.fillRect(x1,y1,x2-x1,y2-y1); c.strokeRect(x1,y1,x2-x1,y2-y1); }
+  else if (shape === 'ellipse') {
+    const cx=(x1+x2)/2, cy=(y1+y2)/2, rx=Math.abs(x2-x1)/2, ry=Math.abs(y2-y1)/2;
+    c.beginPath(); c.ellipse(cx,cy,Math.max(rx,.1),Math.max(ry,.1),0,0,Math.PI*2);
+    if (fillMode==='fill') c.fill(); c.stroke();
+  }
+  c.restore();
+}
+
+// ─── Selection ────────────────────────────────────────────────────
+function updateSelectionUI() {
+  if (!selection.active) { selRect.classList.remove('active'); return; }
+  selRect.classList.add('active');
+  const r = mainCanvas.getBoundingClientRect();
+  const sx = r.width/mainCanvas.width, sy = r.height/mainCanvas.height;
+  selRect.style.left = (selection.x*sx)+'px'; selRect.style.top = (selection.y*sy)+'px';
+  selRect.style.width = (selection.w*sx)+'px'; selRect.style.height = (selection.h*sy)+'px';
+}
+function clearSelection() {
+  selection = { active:false, x:0, y:0, w:0, h:0 };
+  selRect.classList.remove('active');
+  document.getElementById('statusSelection').style.display = 'none';
+  updateResizeSelBtns();
+}
+function updateResizeSelBtns() {
+  const dis = !selection.active || selection.w < 2 || selection.h < 2;
+  document.getElementById('menuResizeImage').classList.toggle('disabled', dis);
+  const panelBtn = document.getElementById('panelResizeSel');
+  if (panelBtn) panelBtn.classList.toggle('disabled', dis);
+}
+function copySelection() {
+  hideCtxMenu();
+  if (!selection.active || selection.w < 1) return;
+  const tc = document.createElement('canvas');
+  tc.width = Math.round(selection.w); tc.height = Math.round(selection.h);
+  tc.getContext('2d').drawImage(mainCanvas, Math.round(selection.x), Math.round(selection.y), tc.width, tc.height, 0, 0, tc.width, tc.height);
+  selectionData = tc;
+  tc.toBlob(b => { if (b && navigator.clipboard?.write) navigator.clipboard.write([new ClipboardItem({'image/png':b})]).catch(()=>{}); });
+}
+function cutSelection() {
+  hideCtxMenu();
+  if (!selection.active) return;
+  copySelection();
+  const sx=Math.round(selection.x), sy=Math.round(selection.y), sw=Math.round(selection.w), sh=Math.round(selection.h);
+  bgCtx.fillStyle='#ffffff'; bgCtx.fillRect(sx,sy,sw,sh);
+  drawCtx.clearRect(sx,sy,sw,sh);
+  composite(); saveState();
+}
+function deleteSelection() {
+  hideCtxMenu();
+  if (!selection.active) return;
+  const sx=Math.round(selection.x), sy=Math.round(selection.y), sw=Math.round(selection.w), sh=Math.round(selection.h);
+  bgCtx.fillStyle='#ffffff'; bgCtx.fillRect(sx,sy,sw,sh);
+  drawCtx.clearRect(sx,sy,sw,sh);
+  composite(); clearSelection(); saveState();
+}
+
+// ─── Floating Paste (draggable) ───────────────────────────────────
+function createFloatingPaste(imgSrc, x, y, w, h) {
+  removeFloatingPaste();
+  const wrapper = document.getElementById('canvasWrapper');
+  const r = mainCanvas.getBoundingClientRect();
+  const sx = r.width/mainCanvas.width, sy = r.height/mainCanvas.height;
+  floatingX = x; floatingY = y; floatingImg = imgSrc;
+
+  const el = document.createElement('div');
+  el.className = 'floating-paste';
+  el.style.left = (x*sx)+'px'; el.style.top = (y*sy)+'px';
+  el.style.width = (w*sx)+'px'; el.style.height = (h*sy)+'px';
+  const img = document.createElement('img');
+  img.src = (imgSrc instanceof HTMLCanvasElement) ? imgSrc.toDataURL() : imgSrc.src;
+  el.appendChild(img);
+  wrapper.appendChild(el);
+  floatingEl = el;
+
+  el.addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation();
+    floatingDragging = true;
+    const elR = el.getBoundingClientRect();
+    floatingDragOfsX = e.clientX - elR.left;
+    floatingDragOfsY = e.clientY - elR.top;
+  });
+  document.addEventListener('mousemove', floatingMoveHandler);
+  document.addEventListener('mouseup', floatingUpHandler);
+}
+
+function floatingMoveHandler(e) {
+  if (!floatingDragging || !floatingEl) return;
+  const wr = document.getElementById('canvasWrapper').getBoundingClientRect();
+  const nx = e.clientX - wr.left - floatingDragOfsX;
+  const ny = e.clientY - wr.top - floatingDragOfsY;
+  floatingEl.style.left = nx+'px'; floatingEl.style.top = ny+'px';
+  const r = mainCanvas.getBoundingClientRect();
+  floatingX = nx * (mainCanvas.width/r.width);
+  floatingY = ny * (mainCanvas.height/r.height);
+}
+function floatingUpHandler() { floatingDragging = false; }
+
+function commitFloatingPaste() {
+  if (!floatingEl || !floatingImg) return;
+  // Determine the pasted image dimensions
+  const pw = floatingImg instanceof HTMLCanvasElement ? floatingImg.width : floatingImg.naturalWidth || floatingImg.width;
+  const ph = floatingImg instanceof HTMLCanvasElement ? floatingImg.height : floatingImg.naturalHeight || floatingImg.height;
+  const px = floatingX, py = floatingY;
+
+  // Paste onto BACKGROUND layer so eraser won't affect it
+  bgCtx.drawImage(floatingImg, px, py);
+  composite(); saveState(); removeFloatingPaste();
+
+  // Auto-select the pasted region so Resize Selection works immediately
+  currentTool = 'select';
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('[data-tool="select"]').classList.add('active');
+  selection = { active: true, x: px, y: py, w: pw, h: ph };
+  updateSelectionUI();
+  updateResizeSelBtns();
+  updateStatus();
+  document.getElementById('statusSelection').style.display = 'inline';
+  document.getElementById('statusSelection').textContent = `Sel: ${Math.round(pw)}×${Math.round(ph)}`;
+}
+function removeFloatingPaste() {
+  if (floatingEl) { floatingEl.remove(); floatingEl=null; floatingImg=null; floatingDragging=false;
+    document.removeEventListener('mousemove', floatingMoveHandler);
+    document.removeEventListener('mouseup', floatingUpHandler);
+  }
+}
+
+document.getElementById('canvasArea').addEventListener('mousedown', e => {
+  if (floatingEl && !floatingDragging && !e.target.closest('.floating-paste')) commitFloatingPaste();
+}, true);
+
+async function pasteClipboard() {
+  hideCtxMenu();
+  try {
+    if (navigator.clipboard?.read) {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        for (const type of item.types) {
+          if (type.startsWith('image/')) {
+            const blob = await item.getType(type);
+            const img = new Image();
+            img.onload = () => createFloatingPaste(img, 10, 10, img.width, img.height);
+            img.src = URL.createObjectURL(blob);
+            return;
+          }
+        }
+      }
+    }
+  } catch(e) {}
+  if (selectionData) createFloatingPaste(selectionData, 10, 10, selectionData.width, selectionData.height);
+}
+
+// ─── Borders ──────────────────────────────────────────────────────
+function addBorderRect() {
+  hideCtxMenu();
+  if (!selection.active) return alert('Make a selection first');
+  drawCtx.save(); drawCtx.strokeStyle = colors.stroke; drawCtx.lineWidth = getVal('shapeStroke');
+  drawCtx.strokeRect(selection.x, selection.y, selection.w, selection.h);
+  drawCtx.restore(); composite(); saveState();
+}
+function addBorderEllipse() {
+  hideCtxMenu();
+  if (!selection.active) return alert('Make a selection first');
+  drawCtx.save(); drawCtx.strokeStyle = colors.stroke; drawCtx.lineWidth = getVal('shapeStroke');
+  drawCtx.beginPath(); drawCtx.ellipse(selection.x+selection.w/2, selection.y+selection.h/2, selection.w/2, selection.h/2, 0, 0, Math.PI*2);
+  drawCtx.stroke(); drawCtx.restore(); composite(); saveState();
+}
+
+// ─── Flood Fill ───────────────────────────────────────────────────
+function floodFill(sx, sy, fillColor) {
+  const compData = mainCtx.getImageData(0,0,mainCanvas.width,mainCanvas.height);
+  const drawData = drawCtx.getImageData(0,0,drawCanvas.width,drawCanvas.height);
+  const cd = compData.data, dd = drawData.data;
+  const w = mainCanvas.width, h = mainCanvas.height;
+  const fc = hexToRgb(fillColor);
+  const idx = (sy*w+sx)*4;
+  const tr=cd[idx], tg=cd[idx+1], tb=cd[idx+2], ta=cd[idx+3];
+  if (tr===fc.r && tg===fc.g && tb===fc.b) return;
+  const stack=[[sx,sy]], visited=new Uint8Array(w*h), tol=30;
+  function match(i) { return Math.abs(cd[i]-tr)+Math.abs(cd[i+1]-tg)+Math.abs(cd[i+2]-tb)+Math.abs(cd[i+3]-ta)<=tol; }
+  while (stack.length) {
+    const [cx,cy] = stack.pop();
+    const ci = cy*w+cx;
+    if (cx<0||cx>=w||cy<0||cy>=h||visited[ci]) continue;
+    if (!match(ci*4)) continue;
+    visited[ci]=1;
+    const pi=ci*4;
+    dd[pi]=fc.r; dd[pi+1]=fc.g; dd[pi+2]=fc.b; dd[pi+3]=255;
+    stack.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]);
+  }
+  drawCtx.putImageData(drawData,0,0);
+  composite();
+}
+function hexToRgb(h) { const v=parseInt(h.slice(1),16); return {r:(v>>16)&255,g:(v>>8)&255,b:v&255}; }
+
+// ─── Eyedropper ───────────────────────────────────────────────────
+function pickColor(x,y) {
+  const p = mainCtx.getImageData(x,y,1,1).data;
+  colors[colorTarget] = '#'+((1<<24)+(p[0]<<16)+(p[1]<<8)+p[2]).toString(16).slice(1);
+  syncColorUI();
+}
+
+// ─── Text Tool ────────────────────────────────────────────────────
+let activeTextCommit = null;
+let textFmt = { bold: false, italic: false, strike: false };
+
+function toggleFmt(key) {
+  textFmt[key] = !textFmt[key];
+  document.getElementById('fmt' + key.charAt(0).toUpperCase() + key.slice(1)).classList.toggle('active', textFmt[key]);
+  // Live-update the textarea preview style
+  const field = document.getElementById('textInputField');
+  field.style.fontWeight = textFmt.bold ? 'bold' : 'normal';
+  field.style.fontStyle = textFmt.italic ? 'italic' : 'normal';
+  field.style.textDecoration = textFmt.strike ? 'line-through' : 'none';
+}
+
+function buildFontString(fontSize) {
+  let style = '';
+  if (textFmt.italic) style += 'italic ';
+  if (textFmt.bold) style += 'bold ';
+  const family = document.getElementById('fontFamily').value;
+  return `${style}${fontSize}px ${family}`;
+}
+
+function showTextInput(canvasX, canvasY) {
+  commitTextInput();
+  const overlay = document.getElementById('textInputOverlay');
+  const field = document.getElementById('textInputField');
+  const r = mainCanvas.getBoundingClientRect();
+  const sx = r.width/mainCanvas.width, sy = r.height/mainCanvas.height;
+  const fontSize = getVal('fontSize');
+  const family = document.getElementById('fontFamily').value;
+  overlay.style.left = (canvasX*sx)+'px';
+  overlay.style.top = (canvasY*sy - fontSize*sy*0.3)+'px';
+  overlay.classList.add('active');
+  field.style.fontSize = (fontSize*sy)+'px';
+  field.style.fontFamily = family;
+  field.style.fontWeight = textFmt.bold ? 'bold' : 'normal';
+  field.style.fontStyle = textFmt.italic ? 'italic' : 'normal';
+  field.style.textDecoration = textFmt.strike ? 'line-through' : 'none';
+  field.style.color = colors.stroke;
+  field.value = '';
+  setTimeout(() => { field.focus(); field.click(); }, 60);
+
+  activeTextCommit = () => {
+    const text = field.value;
+    overlay.classList.remove('active');
+    activeTextCommit = null;
+    if (text.trim()) {
+      drawCtx.save();
+      drawCtx.font = buildFontString(fontSize);
+      drawCtx.fillStyle = colors.stroke;
+      drawCtx.globalAlpha = getVal('brushOpacity')/100;
+      const lineH = fontSize * 1.25;
+      const lines = text.split('\n');
+      lines.forEach((line, i) => {
+        const y = canvasY + i * lineH;
+        drawCtx.fillText(line, canvasX, y);
+        if (textFmt.strike) {
+          const metrics = drawCtx.measureText(line);
+          drawCtx.save();
+          drawCtx.strokeStyle = colors.stroke;
+          drawCtx.lineWidth = Math.max(1, fontSize / 16);
+          drawCtx.beginPath();
+          drawCtx.moveTo(canvasX, y - fontSize * 0.3);
+          drawCtx.lineTo(canvasX + metrics.width, y - fontSize * 0.3);
+          drawCtx.stroke();
+          drawCtx.restore();
+        }
+      });
+      drawCtx.restore();
+      composite(); saveState();
+    }
+  };
+}
+function commitTextInput() { if (activeTextCommit) activeTextCommit(); }
+
+// ─── File Operations ──────────────────────────────────────────────
+function newCanvas() {
+  removeFloatingPaste(); commitTextInput();
+  bgCtx.fillStyle='#ffffff'; bgCtx.fillRect(0,0,bgCanvas.width,bgCanvas.height);
+  drawCtx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+  composite(); clearSelection(); undoStack=[]; redoStack=[]; saveState();
+}
+function openImage() { document.getElementById('fileInput').click(); }
+document.getElementById('fileInput').addEventListener('change', e => {
+  const file=e.target.files[0]; if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    setAllCanvasSize(img.width,img.height);
+    bgCtx.fillStyle='#ffffff'; bgCtx.fillRect(0,0,img.width,img.height);
+    bgCtx.drawImage(img,0,0);
+    drawCtx.clearRect(0,0,img.width,img.height);
+    composite(); updateSizeInputs(img.width,img.height);
+    undoStack=[]; redoStack=[]; saveState();
+  };
+  img.src = URL.createObjectURL(file); e.target.value='';
+});
+
+// ─── Save (PNG / JPG / PDF) ──────────────────────────────────────
+function showSaveModal() { document.getElementById('saveModal').classList.add('active'); }
+document.getElementById('saveFormat').addEventListener('change', e => {
+  document.getElementById('jpgQualityRow').style.display = e.target.value==='jpg' ? 'flex' : 'none';
+});
+document.getElementById('jpgQuality').addEventListener('input', e => {
+  document.getElementById('jpgQualityVal').textContent = e.target.value;
+});
+
+function doSave() {
+  composite();
+  const name = document.getElementById('saveFileName').value || 'image';
+  const fmt = document.getElementById('saveFormat').value;
+  closeModal('saveModal');
+
+  if (fmt === 'png') {
+    downloadDataURL(mainCanvas.toDataURL('image/png'), name+'.png');
+  } else if (fmt === 'jpg') {
+    // JPG needs white background (no transparency)
+    const q = parseInt(document.getElementById('jpgQuality').value)/100;
+    const tc = document.createElement('canvas');
+    tc.width = mainCanvas.width; tc.height = mainCanvas.height;
+    const tCtx = tc.getContext('2d');
+    tCtx.fillStyle = '#ffffff'; tCtx.fillRect(0,0,tc.width,tc.height);
+    tCtx.drawImage(mainCanvas, 0, 0);
+    downloadDataURL(tc.toDataURL('image/jpeg', q), name+'.jpg');
+  } else if (fmt === 'pdf') {
+    savePDF(name+'.pdf');
+  }
+}
+
+function downloadDataURL(dataUrl, filename) {
+  const a = document.createElement('a');
+  a.download = filename; a.href = dataUrl; a.click();
+}
+
+function savePDF(filename) {
+  // Generate a PDF with the canvas image embedded
+  const w = mainCanvas.width, h = mainCanvas.height;
+  // PDF coordinate system: 72 DPI, fit to page
+  const pdfW = w * 72 / 96, pdfH = h * 72 / 96;
+  const imgData = mainCanvas.toDataURL('image/jpeg', 0.95);
+  const imgBytes = atob(imgData.split(',')[1]);
+
+  // Minimal PDF construction
+  const objects = [];
+  let objNum = 0;
+  function addObj(content) { objNum++; objects.push({ num: objNum, content }); return objNum; }
+
+  const catalogNum = addObj(''); // placeholder
+  const pagesNum = addObj('');
+  const pageNum = addObj('');
+  const imgObjNum = addObj('');
+  const contentNum = addObj('');
+
+  // Build image stream
+  const imgLen = imgBytes.length;
+  const imgStream = new Uint8Array(imgLen);
+  for (let i = 0; i < imgLen; i++) imgStream[i] = imgBytes.charCodeAt(i);
+
+  // Content stream: draw image
+  const contentStr = `q ${pdfW} 0 0 ${pdfH} 0 0 cm /Img1 Do Q`;
+
+  // Assemble PDF
+  objects[0].content = `<< /Type /Catalog /Pages ${pagesNum} 0 R >>`;
+  objects[1].content = `<< /Type /Pages /Kids [${pageNum} 0 R] /Count 1 >>`;
+  objects[2].content = `<< /Type /Page /Parent ${pagesNum} 0 R /MediaBox [0 0 ${pdfW} ${pdfH}] /Contents ${contentNum} 0 R /Resources << /XObject << /Img1 ${imgObjNum} 0 R >> >> >>`;
+  objects[3].content = `STREAM_OBJ`;
+  objects[4].content = `CONTENT_STREAM`;
+
+  // Build PDF binary
+  let pdf = '%PDF-1.4\n';
+  const offsets = [];
+
+  for (let i = 0; i < objects.length; i++) {
+    offsets.push(pdf.length);
+    const o = objects[i];
+    if (o.content === 'STREAM_OBJ') {
+      pdf += `${o.num} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imgLen} >>\nstream\n`;
+      // We'll handle this specially
+    } else if (o.content === 'CONTENT_STREAM') {
+      const cBytes = new TextEncoder().encode(contentStr);
+      pdf += `${o.num} 0 obj\n<< /Length ${cBytes.length} >>\nstream\n${contentStr}\nendstream\nendobj\n`;
+    } else {
+      pdf += `${o.num} 0 obj\n${o.content}\nendobj\n`;
+    }
+  }
+
+  // Since we have binary image data, construct as ArrayBuffer
+  const encoder = new TextEncoder();
+  const prePart = pdf.split('stream\n')[0] + 'stream\n';
+  // Actually, let's use a simpler approach: create a blob
+  const preImgText = `%PDF-1.4\n` +
+    `1 0 obj\n${objects[0].content}\nendobj\n` +
+    `2 0 obj\n${objects[1].content}\nendobj\n` +
+    `3 0 obj\n${objects[2].content}\nendobj\n` +
+    `4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imgLen} >>\nstream\n`;
+  const postImgText = `\nendstream\nendobj\n` +
+    `5 0 obj\n<< /Length ${contentStr.length} >>\nstream\n${contentStr}\nendstream\nendobj\n`;
+
+  const preBytes = encoder.encode(preImgText);
+  const postBytes = encoder.encode(postImgText);
+
+  // xref
+  const xrefOffset = preBytes.length + imgStream.length + postBytes.length;
+  const xrefText = `xref\n0 6\n0000000000 65535 f \n` +
+    `0000000009 00000 n \n` +
+    `0000000058 00000 n \n` +
+    `0000000115 00000 n \n` +
+    `${String(preImgText.indexOf('4 0 obj')+9).padStart(10,'0')} 00000 n \n` +
+    `${String(preBytes.length + imgStream.length + postImgText.indexOf('5 0 obj')+1).padStart(10,'0')} 00000 n \n` +
+    `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  const xrefBytes = encoder.encode(xrefText);
+
+  const blob = new Blob([preBytes, imgStream, postBytes, xrefBytes], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.download = filename; a.href = url; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Resize ───────────────────────────────────────────────────────
+function setAllCanvasSize(w,h) { [bgCanvas,drawCanvas,mainCanvas].forEach(c => { c.width=w; c.height=h; }); }
+function updateSizeInputs(w,h) { document.getElementById('canvasW').value=w; document.getElementById('canvasH').value=h; updateStatus(); }
+
+function showResizeCanvasModal() { document.getElementById('rcW').value=mainCanvas.width; document.getElementById('rcH').value=mainCanvas.height; document.getElementById('resizeCanvasModal').classList.add('active'); }
+function showResizeImageModal() {
+  if (!selection.active || selection.w < 2 || selection.h < 2) { alert('Make a selection first (S tool)'); return; }
+  const sw = Math.round(selection.w), sh = Math.round(selection.h);
+  document.getElementById('riCurrent').value = `${sw} × ${sh} px`;
+  document.getElementById('riW').value = sw;
+  document.getElementById('riH').value = sh;
+  document.getElementById('resizeImageModal').classList.add('active');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+function doResizeCanvas() { const w=parseInt(document.getElementById('rcW').value), h=parseInt(document.getElementById('rcH').value); if(w>0&&h>0) resizeCanvasOnly(w,h); closeModal('resizeCanvasModal'); }
+
+function doResizeSelection() {
+  const nw = parseInt(document.getElementById('riW').value);
+  const nh = parseInt(document.getElementById('riH').value);
+  if (!selection.active || nw < 1 || nh < 1) return;
+  closeModal('resizeImageModal');
+
+  const sx = Math.round(selection.x), sy = Math.round(selection.y);
+  const sw = Math.round(selection.w), sh = Math.round(selection.h);
+
+  // Capture the selected region from composite
+  const selCanvas = document.createElement('canvas');
+  selCanvas.width = sw; selCanvas.height = sh;
+  selCanvas.getContext('2d').drawImage(mainCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  // High quality multi-step resize to preserve quality
+  const scaledCanvas = highQualityResizeCanvas(selCanvas, nw, nh);
+
+  // Clear original region from both layers
+  bgCtx.fillStyle = '#ffffff'; bgCtx.fillRect(sx, sy, sw, sh);
+  drawCtx.clearRect(sx, sy, sw, sh);
+
+  // Draw the resized content back onto bg layer at same position
+  bgCtx.drawImage(scaledCanvas, sx, sy);
+
+  composite();
+  // Update selection to new size
+  selection = { active: true, x: sx, y: sy, w: nw, h: nh };
+  updateSelectionUI();
+  updateResizeSelBtns();
+  saveState();
+}
+
+// Multi-step downsampling for best quality resize
+function highQualityResizeCanvas(source, dw, dh) {
+  let cur = source, cw = source.width, ch = source.height;
+  // Step down by halves until close to target size
+  while (cw / 2 > dw || ch / 2 > dh) {
+    const nw = Math.max(Math.round(cw / 2), dw);
+    const nh = Math.max(Math.round(ch / 2), dh);
+    const step = document.createElement('canvas');
+    step.width = nw; step.height = nh;
+    const sCtx = step.getContext('2d');
+    sCtx.imageSmoothingEnabled = true;
+    sCtx.imageSmoothingQuality = 'high';
+    sCtx.drawImage(cur, 0, 0, cw, ch, 0, 0, nw, nh);
+    cur = step; cw = nw; ch = nh;
+  }
+  // Final step to exact target
+  const final = document.createElement('canvas');
+  final.width = dw; final.height = dh;
+  const fCtx = final.getContext('2d');
+  fCtx.imageSmoothingEnabled = true;
+  fCtx.imageSmoothingQuality = 'high';
+  fCtx.drawImage(cur, 0, 0, cw, ch, 0, 0, dw, dh);
+  return final;
+}
+
+function applyCanvasResize() { const w=parseInt(document.getElementById('canvasW').value), h=parseInt(document.getElementById('canvasH').value); if(w>0&&h>0) resizeCanvasOnly(w,h); }
+
+function resizeCanvasOnly(w,h) {
+  const bgT=cloneCanvas(bgCanvas), drawT=cloneCanvas(drawCanvas);
+  setAllCanvasSize(w,h);
+  bgCtx.fillStyle='#ffffff'; bgCtx.fillRect(0,0,w,h); bgCtx.drawImage(bgT,0,0);
+  drawCtx.clearRect(0,0,w,h); drawCtx.drawImage(drawT,0,0);
+  composite(); updateSizeInputs(w,h); saveState();
+}
+
+
+function cloneCanvas(src) { const c=document.createElement('canvas'); c.width=src.width; c.height=src.height; c.getContext('2d').drawImage(src,0,0); return c; }
+
+function selectAll() {
+  hideCtxMenu(); currentTool='select';
+  document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector('[data-tool="select"]').classList.add('active');
+  selection = { active:true, x:0, y:0, w:mainCanvas.width, h:mainCanvas.height };
+  updateSelectionUI(); updateResizeSelBtns(); updateStatus();
+}
+function clearCanvas() {
+  bgCtx.fillStyle='#ffffff'; bgCtx.fillRect(0,0,bgCanvas.width,bgCanvas.height);
+  drawCtx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+  composite(); saveState();
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────
+function getVal(id) { return parseInt(document.getElementById(id).value); }
+function updateStatus() {
+  const n={brush:'Brush',eraser:'Eraser',line:'Line',rect:'Rectangle',ellipse:'Ellipse',select:'Select',highlight:'Highlighter',fill:'Fill',eyedropper:'Eyedropper',text:'Text'};
+  document.getElementById('statusTool').textContent = n[currentTool]||currentTool;
+  document.getElementById('statusSize').textContent = `${mainCanvas.width} × ${mainCanvas.height}`;
+}
+['brushSize','brushOpacity','shapeStroke','highlightSize','highlightOpacity','fontSize'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => { document.getElementById(id+'Val').textContent = document.getElementById(id).value; });
+});
+
+// ─── Context Menu ─────────────────────────────────────────────────
+function hideCtxMenu() { document.getElementById('ctxMenu').classList.remove('active'); }
+mainCanvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const m=document.getElementById('ctxMenu'); m.style.left=e.clientX+'px'; m.style.top=e.clientY+'px'; m.classList.add('active');
+});
+document.addEventListener('click', e => { if (!e.target.closest('.ctx-menu')) hideCtxMenu(); });
+
+// ─── Keyboard Shortcuts ───────────────────────────────────────────
+function bindEvents() {
+  document.addEventListener('keydown', e => {
+    const tag = e.target.tagName;
+    // Don't intercept when typing in inputs
+    if (tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT') {
+      if (e.target.id === 'textInputField') {
+        if (e.key==='Escape') { document.getElementById('textInputOverlay').classList.remove('active'); activeTextCommit=null; }
+        if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); commitTextInput(); }
+      }
+      return; // <-- critical: let normal typing work in inputs
+    }
+    const ctrl = e.ctrlKey||e.metaKey;
+    if (ctrl&&e.key==='z') { e.preventDefault(); undoAction(); }
+    if (ctrl&&e.key==='y') { e.preventDefault(); redoAction(); }
+    if (ctrl&&e.key==='c') { e.preventDefault(); copySelection(); }
+    if (ctrl&&e.key==='x') { e.preventDefault(); cutSelection(); }
+    if (ctrl&&e.key==='v') { e.preventDefault(); pasteClipboard(); }
+    if (ctrl&&e.key==='a') { e.preventDefault(); selectAll(); }
+    if (ctrl&&e.key==='s') { e.preventDefault(); showSaveModal(); }
+    if (e.key==='Delete') deleteSelection();
+    if (e.key==='Escape') { commitFloatingPaste(); commitTextInput(); }
+    if (!ctrl&&!e.altKey) {
+      const map={b:'brush',e:'eraser',l:'line',r:'rect',o:'ellipse',s:'select',h:'highlight',f:'fill',i:'eyedropper',t:'text'};
+      if (map[e.key]) document.querySelector(`[data-tool="${map[e.key]}"]`).click();
+    }
+  });
+
+  // Paste images from clipboard
+  document.addEventListener('paste', e => {
+    if (e.target.id==='textInputField') return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const blob = item.getAsFile();
+        const img = new Image();
+        img.onload = () => createFloatingPaste(img, 10, 10, img.width, img.height);
+        img.src = URL.createObjectURL(blob);
+        return;
+      }
+    }
+  });
+
+  // Drag and drop
+  const area = document.getElementById('canvasArea');
+  area.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect='copy'; });
+  area.addEventListener('drop', e => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+      const img = new Image();
+      img.onload = () => {
+        setAllCanvasSize(img.width,img.height);
+        bgCtx.fillStyle='#ffffff'; bgCtx.fillRect(0,0,img.width,img.height);
+        bgCtx.drawImage(img,0,0);
+        drawCtx.clearRect(0,0,img.width,img.height);
+        composite(); updateSizeInputs(img.width,img.height);
+        undoStack=[]; redoStack=[]; saveState();
+      };
+      img.src = URL.createObjectURL(file);
+    }
+  });
+}
+
+// ─── Start ────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
