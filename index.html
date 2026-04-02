@@ -44,11 +44,29 @@
   .palette-color:hover { border-color: #666666; }
   .palette-color.active { border-color: #cba6f7; }
 
-  .canvas-area { flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; background: #d0d0d0; position: relative; }
-  .canvas-wrapper { position: relative; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+  .canvas-area { flex: 1; overflow: auto; background: #d0d0d0; position: relative; }
+  .canvas-wrapper { position: relative; box-shadow: 0 2px 12px rgba(0,0,0,0.15); margin: 10px auto; }
   #bgCanvas { position: absolute; top: 0; left: 0; display: block; }
   #drawCanvas { position: absolute; top: 0; left: 0; display: block; }
   #mainCanvas { display: block; cursor: crosshair; image-rendering: auto; position: relative; z-index: 2; }
+
+  /* Grid overlay — sits above mainCanvas (z-index 2) so it's visible */
+  .canvas-wrapper.show-grid::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-image: linear-gradient(0deg, rgba(0,0,0,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.12) 1px, transparent 1px); background-size: 20px 20px; pointer-events: none; z-index: 3; }
+
+  /* Canvas edge resize zones — invisible, cursor-only */
+  .canvas-edge-zone { position: absolute; z-index: 4; }
+  .canvas-edge-zone.edge-right { top: 0; right: -5px; width: 10px; height: 100%; cursor: ew-resize; }
+  .canvas-edge-zone.edge-bottom { bottom: -5px; left: 0; width: 100%; height: 10px; cursor: ns-resize; }
+  .canvas-edge-zone.edge-corner { bottom: -5px; right: -5px; width: 14px; height: 14px; cursor: nwse-resize; }
+
+  /* Comment dialog bubble */
+  .comment-bubble { position: absolute; z-index: 16; background: #FFF44F; border: 2px solid #e6d400; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.18); resize: both; overflow: hidden; font-size: 13px; color: #333; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; flex-direction: column; min-width: 160px; min-height: 80px; width: 200px; height: 110px; }
+  .comment-bubble::after { content: ''; position: absolute; bottom: -12px; left: 18px; width: 0; height: 0; border-left: 12px solid transparent; border-right: 4px solid transparent; border-top: 12px solid #FFF44F; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1)); }
+  .comment-bubble::before { content: ''; position: absolute; bottom: -15px; left: 17px; width: 0; height: 0; border-left: 13px solid transparent; border-right: 5px solid transparent; border-top: 14px solid #e6d400; }
+  .note-drag-bar { height: 22px; min-height: 22px; background: rgba(0,0,0,0.06); cursor: move; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; font-size: 10px; color: #888; border-bottom: 1px solid rgba(0,0,0,0.08); user-select: none; border-radius: 10px 10px 0 0; }
+  .note-drag-bar .note-close { cursor: pointer; font-size: 14px; color: #999; line-height: 1; }
+  .note-drag-bar .note-close:hover { color: #e53935; }
+  .note-body { flex: 1; padding: 6px 10px; outline: none; overflow: auto; cursor: text; white-space: pre-wrap; word-wrap: break-word; }
 
   .selection-rect { position: absolute; border: 2px dashed #89b4fa; background: rgba(137,180,250,0.08); pointer-events: none; display: none; z-index: 10; }
   .selection-rect.active { display: block; }
@@ -105,10 +123,10 @@
   <button class="menu-btn" onclick="showSaveModal()">Save</button>
   <button class="menu-btn" onclick="undoAction()">Undo</button>
   <button class="menu-btn" onclick="redoAction()">Redo</button>
-  <button class="menu-btn" onclick="showResizeCanvasModal()">Resize Canvas</button>
-  <button class="menu-btn disabled" id="menuResizeImage" onclick="showResizeImageModal()">Resize Selection</button>
+  <button class="menu-btn" onclick="smartResizeCanvas()">Resize Canvas</button>
   <button class="menu-btn" onclick="selectAll()">Select All</button>
   <button class="menu-btn" onclick="clearCanvas()">Clear</button>
+  <button class="menu-btn" id="gridToggleBtn" onclick="toggleGrid()" style="border:2px solid transparent;border-radius:4px;">Grid</button>
   <div style="width:1px;background:#c0c0c0;height:18px;margin:0 4px;"></div>
   <span style="font-size:11px;color:#555;font-weight:600;white-space:nowrap;">Canvas:</span>
   <span style="font-size:11px;color:#555;">W</span>
@@ -116,6 +134,23 @@
   <span style="font-size:11px;color:#555;">H</span>
   <input type="number" id="canvasH" value="800" min="1" max="8000" style="width:62px;padding:2px 5px;font-size:12px;border:1px solid #bbb;border-radius:4px;background:#fff;color:#333;">
   <button class="menu-btn" onclick="applyCanvasResize()">Apply</button>
+  <div style="width:1px;background:#c0c0c0;height:18px;margin:0 4px;"></div>
+  <span id="resizeSelLabel" style="font-size:11px;color:#555;font-weight:600;white-space:nowrap;opacity:0.4;">Resize Sel:</span>
+  <span id="resizeSelControls" style="display:flex;align-items:center;gap:4px;opacity:0.4;pointer-events:none;">
+    <span style="font-size:11px;color:#555;">W</span>
+    <input type="number" id="riW2" value="0" min="1" max="8000" style="width:58px;padding:2px 5px;font-size:12px;border:1px solid #bbb;border-radius:4px;background:#fff;color:#333;">
+    <button id="ratioLockBtn" onclick="toggleRatioLock()" title="Toggle proportional lock" style="background:none;border:1px solid #bbb;border-radius:4px;cursor:pointer;font-size:14px;padding:1px 5px;line-height:1;color:#cba6f7;">🔗</button>
+    <span style="font-size:11px;color:#555;">H</span>
+    <input type="number" id="riH2" value="0" min="1" max="8000" style="width:58px;padding:2px 5px;font-size:12px;border:1px solid #bbb;border-radius:4px;background:#fff;color:#333;">
+    <select id="resizePercent" onchange="applyResizePercent()" style="width:58px;padding:2px 3px;font-size:11px;border:1px solid #bbb;border-radius:4px;background:#fff;color:#333;">
+      <option value="">%</option>
+      <option value="25">25%</option>
+      <option value="50">50%</option>
+      <option value="75">75%</option>
+      <option value="100">100%</option>
+    </select>
+    <button class="menu-btn" style="background:#cba6f7;color:#fff;border-radius:4px;padding:2px 8px;" onclick="applyInlineResize()">Resize</button>
+  </span>
 </div>
 
 <div class="main-layout">
@@ -128,6 +163,12 @@
     </button>
     <button class="tool-btn" data-tool="line" title="Line (L)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="arrow" title="Arrow">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="curve" title="Curve">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20c0-1 1-4 5-5 4-1 5-3 10-4 5-1 5 2 5 4"/></svg>
     </button>
     <button class="tool-btn" data-tool="rect" title="Rectangle (R)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
@@ -145,11 +186,18 @@
     <button class="tool-btn" data-tool="fill" title="Fill (F)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 22l1-1h4l9-9-5-5-9 9v4l-1 1"/><path d="M7 11l5-5"/><path d="M19 15c1.5 1.5 2 3.5 0 5s-3.5.5-5 0"/></svg>
     </button>
-    <button class="tool-btn" data-tool="eyedropper" title="Eyedropper (I)">
+    <button class="tool-btn" data-tool="eyedropper" title="Eyedropper — canvas only (I)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 22l1-1 4-4 3 3-4 4-1-1z"/><path d="M7 17L17 7l-3-3"/><circle cx="19" cy="5" r="2"/></svg>
+    </button>
+    <button class="tool-btn" id="screenPickerBtn" title="Pick color from screen" onclick="pickColorFromScreen()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.3"/><line x1="12" y1="1" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="1" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="23" y2="12"/></svg>
     </button>
     <button class="tool-btn" data-tool="text" title="Text (T)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+    </button>
+    <div class="tool-sep"></div>
+    <button class="tool-btn" data-tool="comment" title="Comment (C)">
+      💬
     </button>
   </div>
 
@@ -321,6 +369,11 @@ const MAX_UNDO = 40;
 let selection = { active: false, x: 0, y: 0, w: 0, h: 0 };
 let selectionData = null;
 
+// Grid overlay
+let gridEnabled = false;
+let stickyNoteCounter = 0;
+let commentCounter = 0;
+
 // Floating paste
 let floatingEl = null, floatingImg = null;
 let floatingX = 0, floatingY = 0;
@@ -388,16 +441,112 @@ function initCursors() {
 
 // ─── Init ─────────────────────────────────────────────────────────
 function init() {
-  bgCtx.fillStyle = '#ffffff';
-  bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
-  drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
   initCursors();
-  composite();
-  saveState();
+  initResponsiveCanvas(); // sets canvas to 90% width, 100% height — redraws & composites
   buildPalette();
   bindEvents();
   updateStatus();
   syncColorUI();
+  addCanvasResizeHandle();
+}
+
+// ─── Responsive Canvas (Enhancement 1) ────────────────────────────
+function initResponsiveCanvas() {
+  function updateCanvasSize() {
+    const area = document.getElementById('canvasArea');
+    const wrapper = document.getElementById('canvasWrapper');
+    const menuBar = document.querySelector('.menu-bar');
+    const statusBar = document.querySelector('.status-bar');
+    const toolBar = document.querySelector('.toolbar');
+    const propsPanel = document.querySelector('.props-panel');
+
+    const availHeight = window.innerHeight - menuBar.offsetHeight - statusBar.offsetHeight;
+    const availWidth = window.innerWidth - toolBar.offsetWidth - propsPanel.offsetWidth;
+
+    // 90% of available width → 5% gap on each side (centered via flexbox)
+    const targetWidth = Math.round(availWidth * 0.9);
+    const targetHeight = Math.round(availHeight - 20); // subtract padding
+
+    // Resize the actual canvas pixels and sync wrapper
+    setAllCanvasSize(targetWidth, targetHeight);
+    wrapper.style.width = targetWidth + 'px';
+    wrapper.style.height = targetHeight + 'px';
+    bgCtx.fillStyle = '#ffffff';
+    bgCtx.fillRect(0, 0, targetWidth, targetHeight);
+    drawCtx.clearRect(0, 0, targetWidth, targetHeight);
+    composite();
+    updateSizeInputs(targetWidth, targetHeight);
+    undoStack = []; redoStack = [];
+    saveState();
+  }
+
+  // Only auto-size on first load
+  updateCanvasSize();
+
+  // On window resize, just let the canvas-area scroll — don't destroy content
+  // User can manually resize with the drag handle or menu
+}
+
+// ─── Canvas Edge / Vertex Resize ─────────────────────────────────
+function addCanvasResizeHandle() {
+  const wrapper = document.getElementById('canvasWrapper');
+
+  // Create three invisible edge zones: right, bottom, corner
+  ['edge-right', 'edge-bottom', 'edge-corner'].forEach(cls => {
+    const zone = document.createElement('div');
+    zone.className = 'canvas-edge-zone ' + cls;
+    wrapper.appendChild(zone);
+  });
+
+  let resizing = false, resizeMode = '';
+  let rStartX, rStartY, rStartW, rStartH;
+
+  wrapper.addEventListener('mousedown', e => {
+    const zone = e.target.closest('.canvas-edge-zone');
+    if (!zone) return;
+    resizing = true;
+    rStartX = e.clientX;
+    rStartY = e.clientY;
+    rStartW = mainCanvas.width;
+    rStartH = mainCanvas.height;
+    if (zone.classList.contains('edge-corner')) resizeMode = 'corner';
+    else if (zone.classList.contains('edge-right')) resizeMode = 'right';
+    else if (zone.classList.contains('edge-bottom')) resizeMode = 'bottom';
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!resizing) return;
+    const dx = e.clientX - rStartX;
+    const dy = e.clientY - rStartY;
+    let nw = rStartW, nh = rStartH;
+    if (resizeMode === 'right' || resizeMode === 'corner') nw = Math.max(200, rStartW + dx);
+    if (resizeMode === 'bottom' || resizeMode === 'corner') nh = Math.max(150, rStartH + dy);
+    // Live preview via wrapper size (don't resize canvas pixels during drag)
+    wrapper.style.width = nw + 'px';
+    wrapper.style.height = nh + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!resizing) return;
+    resizing = false;
+    // Commit: resize the actual canvas to match wrapper size
+    const nw = Math.round(wrapper.offsetWidth);
+    const nh = Math.round(wrapper.offsetHeight);
+    if (nw !== mainCanvas.width || nh !== mainCanvas.height) {
+      resizeCanvasOnly(nw, nh);
+    }
+  });
+}
+
+// ─── Grid Toggle (Enhancement 3) ──────────────────────────────────
+function toggleGrid() {
+  gridEnabled = !gridEnabled;
+  const wrapper = document.getElementById('canvasWrapper');
+  wrapper.classList.toggle('show-grid', gridEnabled);
+  document.getElementById('gridToggleBtn').style.background = gridEnabled ? '#ffffff' : '#f0f0f0';
+  document.getElementById('gridToggleBtn').style.borderColor = gridEnabled ? '#cba6f7' : 'transparent';
 }
 
 function composite() {
@@ -491,6 +640,15 @@ document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
   });
 });
 
+function switchToTool(toolName) {
+  currentTool = toolName;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`[data-tool="${toolName}"]`);
+  if (btn) btn.classList.add('active');
+  mainCanvas.style.cursor = toolCursors[currentTool] || 'crosshair';
+  updateStatus();
+}
+
 // ─── Canvas Events ────────────────────────────────────────────────
 function getPos(e) {
   const r = mainCanvas.getBoundingClientRect();
@@ -545,6 +703,7 @@ mainCanvas.addEventListener('mousedown', e => {
   if (currentTool === 'fill') { floodFill(Math.round(p.x), Math.round(p.y), colors.fill); saveState(); isDrawing = false; }
   if (currentTool === 'eyedropper') { pickColor(Math.round(p.x), Math.round(p.y)); isDrawing = false; }
   if (currentTool === 'text') { isDrawing = false; showTextInput(p.x, p.y); }
+  if (currentTool === 'comment') { isDrawing = false; createComment(p.x, p.y); switchToTool('brush'); }
 });
 
 mainCanvas.addEventListener('mousemove', e => {
@@ -559,7 +718,7 @@ mainCanvas.addEventListener('mousemove', e => {
     }
     composite();
   }
-  if (currentTool === 'line' || currentTool === 'rect' || currentTool === 'ellipse') {
+  if (currentTool === 'line' || currentTool === 'rect' || currentTool === 'ellipse' || currentTool === 'arrow' || currentTool === 'curve') {
     composite();
     shapeOnCtx(mainCtx, startX, startY, p.x, p.y, currentTool, 0.7);
   }
@@ -586,7 +745,7 @@ mainCanvas.addEventListener('mouseup', e => {
     }
     composite(); saveState();
   }
-  if (currentTool === 'line' || currentTool === 'rect' || currentTool === 'ellipse') {
+  if (currentTool === 'line' || currentTool === 'rect' || currentTool === 'ellipse' || currentTool === 'arrow' || currentTool === 'curve') {
     shapeOnCtx(drawCtx, startX, startY, p.x, p.y, currentTool, 1.0);
     composite(); saveState();
   }
@@ -613,7 +772,7 @@ mainCanvas.addEventListener('mouseleave', () => {
   }
 });
 
-// ─── Shape Drawing ────────────────────────────────────────────────
+// ─── Shape Drawing (Enhancement 6) ───────────────────────────────
 function shapeOnCtx(c, x1, y1, x2, y2, shape, alpha) {
   const fillMode = document.getElementById('shapeFill').value;
   c.save();
@@ -622,6 +781,8 @@ function shapeOnCtx(c, x1, y1, x2, y2, shape, alpha) {
   c.fillStyle = colors.fill;
   c.globalAlpha = alpha;
   if (shape === 'line') { c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); c.stroke(); }
+  else if (shape === 'arrow') { drawArrow(c, x1, y1, x2, y2, getVal('shapeStroke')); }
+  else if (shape === 'curve') { drawCurve(c, x1, y1, x2, y2); }
   else if (shape === 'rect') { if (fillMode==='fill') c.fillRect(x1,y1,x2-x1,y2-y1); c.strokeRect(x1,y1,x2-x1,y2-y1); }
   else if (shape === 'ellipse') {
     const cx=(x1+x2)/2, cy=(y1+y2)/2, rx=Math.abs(x2-x1)/2, ry=Math.abs(y2-y1)/2;
@@ -631,14 +792,47 @@ function shapeOnCtx(c, x1, y1, x2, y2, shape, alpha) {
   c.restore();
 }
 
+function drawArrow(c, x1, y1, x2, y2, thickness) {
+  const headlen = 10 + thickness * 0.5;
+  const halfAngle = Math.PI / 8; // narrow 22.5° tip
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  // Line shaft
+  c.beginPath();
+  c.moveTo(x1, y1);
+  c.lineTo(x2, y2);
+  c.stroke();
+  // Thin arrowhead — two lines, no fill
+  c.beginPath();
+  c.moveTo(x2 - headlen * Math.cos(angle - halfAngle), y2 - headlen * Math.sin(angle - halfAngle));
+  c.lineTo(x2, y2);
+  c.lineTo(x2 - headlen * Math.cos(angle + halfAngle), y2 - headlen * Math.sin(angle + halfAngle));
+  c.stroke();
+}
+
+function drawCurve(c, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const midX = (x1 + x2) / 2;
+  const midY = (y1 + y2) / 2;
+  const cpDist = dist / 2;
+  const perpAngle = Math.atan2(dy, dx) + Math.PI / 2;
+  const cpX = midX + cpDist * Math.cos(perpAngle);
+  const cpY = midY + cpDist * Math.sin(perpAngle);
+
+  c.beginPath();
+  c.moveTo(x1, y1);
+  c.quadraticCurveTo(cpX, cpY, x2, y2);
+  c.stroke();
+}
+
 // ─── Selection ────────────────────────────────────────────────────
 function updateSelectionUI() {
   if (!selection.active) { selRect.classList.remove('active'); return; }
   selRect.classList.add('active');
-  const r = mainCanvas.getBoundingClientRect();
-  const sx = r.width/mainCanvas.width, sy = r.height/mainCanvas.height;
-  selRect.style.left = (selection.x*sx)+'px'; selRect.style.top = (selection.y*sy)+'px';
-  selRect.style.width = (selection.w*sx)+'px'; selRect.style.height = (selection.h*sy)+'px';
+  // 1:1 mapping — wrapper CSS = canvas pixels
+  selRect.style.left = selection.x+'px'; selRect.style.top = selection.y+'px';
+  selRect.style.width = selection.w+'px'; selRect.style.height = selection.h+'px';
 }
 function clearSelection() {
   selection = { active:false, x:0, y:0, w:0, h:0 };
@@ -648,9 +842,10 @@ function clearSelection() {
 }
 function updateResizeSelBtns() {
   const dis = !selection.active || selection.w < 2 || selection.h < 2;
-  document.getElementById('menuResizeImage').classList.toggle('disabled', dis);
   const panelBtn = document.getElementById('panelResizeSel');
   if (panelBtn) panelBtn.classList.toggle('disabled', dis);
+  // Enable/disable inline resize controls in top banner
+  if (!dis) { enableResizeControls(); } else { disableResizeControls(); }
 }
 function copySelection() {
   hideCtxMenu();
@@ -679,33 +874,33 @@ function deleteSelection() {
   composite(); clearSelection(); saveState();
 }
 
-// ─── Floating Paste (draggable) ───────────────────────────────────
+// ─── Floating Paste (draggable + auto-resize) ─────────────────── (Enhancement 2)
 function createFloatingPaste(imgSrc, x, y, w, h) {
   removeFloatingPaste();
-  const wrapper = document.getElementById('canvasWrapper');
-  const r = mainCanvas.getBoundingClientRect();
-  const sx = r.width/mainCanvas.width, sy = r.height/mainCanvas.height;
-  floatingX = x; floatingY = y; floatingImg = imgSrc;
 
-  const el = document.createElement('div');
-  el.className = 'floating-paste';
-  el.style.left = (x*sx)+'px'; el.style.top = (y*sy)+'px';
-  el.style.width = (w*sx)+'px'; el.style.height = (h*sy)+'px';
-  const img = document.createElement('img');
-  img.src = (imgSrc instanceof HTMLCanvasElement) ? imgSrc.toDataURL() : imgSrc.src;
-  el.appendChild(img);
-  wrapper.appendChild(el);
-  floatingEl = el;
+  // Auto-resize canvas to fully fit the pasted image (plus paste offset)
+  const neededW = x + w;
+  const neededH = y + h;
+  if (neededW > mainCanvas.width || neededH > mainCanvas.height) {
+    const newW = Math.max(mainCanvas.width, neededW);
+    const newH = Math.max(mainCanvas.height, neededH);
+    resizeCanvasOnly(newW, newH);
+  }
 
-  el.addEventListener('mousedown', e => {
-    e.preventDefault(); e.stopPropagation();
-    floatingDragging = true;
-    const elR = el.getBoundingClientRect();
-    floatingDragOfsX = e.clientX - elR.left;
-    floatingDragOfsY = e.clientY - elR.top;
-  });
-  document.addEventListener('mousemove', floatingMoveHandler);
-  document.addEventListener('mouseup', floatingUpHandler);
+  // Immediately commit to canvas and auto-select so resize controls work right away
+  bgCtx.drawImage(imgSrc, x, y);
+  composite(); saveState();
+
+  // Auto-select the pasted region
+  currentTool = 'select';
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('[data-tool="select"]').classList.add('active');
+  selection = { active: true, x: x, y: y, w: w, h: h };
+  updateSelectionUI();
+  updateResizeSelBtns();
+  updateStatus();
+  document.getElementById('statusSelection').style.display = 'inline';
+  document.getElementById('statusSelection').textContent = `Sel: ${Math.round(w)}×${Math.round(h)}`;
 }
 
 function floatingMoveHandler(e) {
@@ -714,33 +909,15 @@ function floatingMoveHandler(e) {
   const nx = e.clientX - wr.left - floatingDragOfsX;
   const ny = e.clientY - wr.top - floatingDragOfsY;
   floatingEl.style.left = nx+'px'; floatingEl.style.top = ny+'px';
-  const r = mainCanvas.getBoundingClientRect();
-  floatingX = nx * (mainCanvas.width/r.width);
-  floatingY = ny * (mainCanvas.height/r.height);
+  // 1:1 mapping — wrapper CSS = canvas pixels
+  floatingX = nx;
+  floatingY = ny;
 }
 function floatingUpHandler() { floatingDragging = false; }
 
 function commitFloatingPaste() {
-  if (!floatingEl || !floatingImg) return;
-  // Determine the pasted image dimensions
-  const pw = floatingImg instanceof HTMLCanvasElement ? floatingImg.width : floatingImg.naturalWidth || floatingImg.width;
-  const ph = floatingImg instanceof HTMLCanvasElement ? floatingImg.height : floatingImg.naturalHeight || floatingImg.height;
-  const px = floatingX, py = floatingY;
-
-  // Paste onto BACKGROUND layer so eraser won't affect it
-  bgCtx.drawImage(floatingImg, px, py);
-  composite(); saveState(); removeFloatingPaste();
-
-  // Auto-select the pasted region so Resize Selection works immediately
-  currentTool = 'select';
-  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-  document.querySelector('[data-tool="select"]').classList.add('active');
-  selection = { active: true, x: px, y: py, w: pw, h: ph };
-  updateSelectionUI();
-  updateResizeSelBtns();
-  updateStatus();
-  document.getElementById('statusSelection').style.display = 'inline';
-  document.getElementById('statusSelection').textContent = `Sel: ${Math.round(pw)}×${Math.round(ph)}`;
+  // Images are now committed immediately on paste — this is kept for compatibility
+  removeFloatingPaste();
 }
 function removeFloatingPaste() {
   if (floatingEl) { floatingEl.remove(); floatingEl=null; floatingImg=null; floatingDragging=false;
@@ -763,7 +940,9 @@ async function pasteClipboard() {
           if (type.startsWith('image/')) {
             const blob = await item.getType(type);
             const img = new Image();
-            img.onload = () => createFloatingPaste(img, 10, 10, img.width, img.height);
+            img.onload = () => {
+              createFloatingPaste(img, 10, 10, img.width, img.height);
+            };
             img.src = URL.createObjectURL(blob);
             return;
           }
@@ -771,7 +950,15 @@ async function pasteClipboard() {
       }
     }
   } catch(e) {}
-  if (selectionData) createFloatingPaste(selectionData, 10, 10, selectionData.width, selectionData.height);
+  if (selectionData) {
+    let w = selectionData.width, h = selectionData.height;
+    if (w > mainCanvas.width || h > mainCanvas.height) {
+      const scale = Math.min(mainCanvas.width / w, mainCanvas.height / h);
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+    }
+    createFloatingPaste(selectionData, 10, 10, w, h);
+  }
 }
 
 // ─── Borders ──────────────────────────────────────────────────────
@@ -824,6 +1011,25 @@ function pickColor(x,y) {
   syncColorUI();
 }
 
+// ─── Screen Color Picker (EyeDropper API) ─────────────────────────
+async function pickColorFromScreen() {
+  if (!window.EyeDropper) {
+    alert('Screen color picker is not supported in this browser. Please use Chrome or Edge.');
+    return;
+  }
+  const btn = document.getElementById('screenPickerBtn');
+  btn.classList.add('active');
+  try {
+    const dropper = new EyeDropper();
+    const result = await dropper.open();
+    colors[colorTarget] = result.sRGBHex;
+    syncColorUI();
+  } catch (e) {
+    // user cancelled — do nothing
+  }
+  btn.classList.remove('active');
+}
+
 // ─── Text Tool ────────────────────────────────────────────────────
 let activeTextCommit = null;
 let textFmt = { bold: false, italic: false, strike: false };
@@ -850,14 +1056,12 @@ function showTextInput(canvasX, canvasY) {
   commitTextInput();
   const overlay = document.getElementById('textInputOverlay');
   const field = document.getElementById('textInputField');
-  const r = mainCanvas.getBoundingClientRect();
-  const sx = r.width/mainCanvas.width, sy = r.height/mainCanvas.height;
   const fontSize = getVal('fontSize');
   const family = document.getElementById('fontFamily').value;
-  overlay.style.left = (canvasX*sx)+'px';
-  overlay.style.top = (canvasY*sy - fontSize*sy*0.3)+'px';
+  overlay.style.left = canvasX+'px';
+  overlay.style.top = (canvasY - fontSize*0.3)+'px';
   overlay.classList.add('active');
-  field.style.fontSize = (fontSize*sy)+'px';
+  field.style.fontSize = fontSize+'px';
   field.style.fontFamily = family;
   field.style.fontWeight = textFmt.bold ? 'bold' : 'normal';
   field.style.fontStyle = textFmt.italic ? 'italic' : 'normal';
@@ -898,6 +1102,82 @@ function showTextInput(canvasX, canvasY) {
   };
 }
 function commitTextInput() { if (activeTextCommit) activeTextCommit(); }
+
+// ─── Sticky Notes and Comments (Enhancement 4) ───────────────────
+function createStickyNote(canvasX, canvasY) {
+  const wrapper = document.getElementById('canvasWrapper');
+
+  const note = document.createElement('div');
+  note.className = 'sticky-note';
+  note.style.left = canvasX + 'px';
+  note.style.top = canvasY + 'px';
+
+  const dragBar = document.createElement('div');
+  dragBar.className = 'note-drag-bar';
+  dragBar.innerHTML = '<span>≡ Note</span><span class="note-close">✕</span>';
+  dragBar.querySelector('.note-close').addEventListener('click', () => note.remove());
+
+  const body = document.createElement('div');
+  body.className = 'note-body';
+  body.contentEditable = 'true';
+  body.textContent = 'Note ' + (++stickyNoteCounter);
+
+  note.appendChild(dragBar);
+  note.appendChild(body);
+  makeDraggable(note, dragBar);
+  wrapper.appendChild(note);
+  body.focus();
+}
+
+function createComment(canvasX, canvasY) {
+  const wrapper = document.getElementById('canvasWrapper');
+
+  const comment = document.createElement('div');
+  comment.className = 'comment-bubble';
+  comment.style.left = canvasX + 'px';
+  comment.style.top = canvasY + 'px';
+
+  const dragBar = document.createElement('div');
+  dragBar.className = 'note-drag-bar';
+  dragBar.innerHTML = '<span>≡ Comment</span><span class="note-close">✕</span>';
+  dragBar.querySelector('.note-close').addEventListener('click', () => comment.remove());
+
+  const body = document.createElement('div');
+  body.className = 'note-body';
+  body.contentEditable = 'true';
+  body.textContent = 'Comment ' + (++commentCounter);
+
+  comment.appendChild(dragBar);
+  comment.appendChild(body);
+  makeDraggable(comment, dragBar);
+  wrapper.appendChild(comment);
+  body.focus();
+}
+
+function makeDraggable(el, handle) {
+  let isDragging = false;
+  let offsetX = 0, offsetY = 0;
+
+  handle.addEventListener('mousedown', e => {
+    isDragging = true;
+    const rect = el.getBoundingClientRect();
+    offsetX = e.clientX - rect.left;
+    offsetY = e.clientY - rect.top;
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const wrapper = document.getElementById('canvasWrapper');
+    const rect = wrapper.getBoundingClientRect();
+    el.style.left = Math.max(0, e.clientX - rect.left - offsetX) + 'px';
+    el.style.top = Math.max(0, e.clientY - rect.top - offsetY) + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+  });
+}
 
 // ─── File Operations ──────────────────────────────────────────────
 function newCanvas() {
@@ -1047,6 +1327,63 @@ function setAllCanvasSize(w,h) { [bgCanvas,drawCanvas,hlCanvas,mainCanvas].forEa
 function updateSizeInputs(w,h) { document.getElementById('canvasW').value=w; document.getElementById('canvasH').value=h; updateStatus(); }
 
 function showResizeCanvasModal() { document.getElementById('rcW').value=mainCanvas.width; document.getElementById('rcH').value=mainCanvas.height; document.getElementById('resizeCanvasModal').classList.add('active'); }
+
+function smartResizeCanvas() {
+  // Scan composite canvas for non-white pixel bounding box
+  composite();
+  const w = mainCanvas.width, h = mainCanvas.height;
+  const data = mainCtx.getImageData(0, 0, w, h).data;
+  let minX = w, minY = h, maxX = -1, maxY = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      // Check if pixel differs from white (R=255,G=255,B=255)
+      if (data[i] !== 255 || data[i+1] !== 255 || data[i+2] !== 255) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  if (maxX < 0) {
+    // No content — reset to default screen-fitting size
+    const menuBar = document.querySelector('.menu-bar');
+    const statusBar = document.querySelector('.status-bar');
+    const toolBar = document.querySelector('.toolbar');
+    const propsPanel = document.querySelector('.props-panel');
+    const availH = window.innerHeight - menuBar.offsetHeight - statusBar.offsetHeight;
+    const availW = window.innerWidth - toolBar.offsetWidth - propsPanel.offsetWidth;
+    const defW = Math.round(availW * 0.9);
+    const defH = Math.round(availH - 20);
+    resizeCanvasOnly(defW, defH);
+  } else {
+    // Crop canvas to exactly fit the content with a small 5px margin
+    const margin = 5;
+    const contentW = maxX - minX + 1 + margin * 2;
+    const contentH = maxY - minY + 1 + margin * 2;
+    const srcX = Math.max(0, minX - margin);
+    const srcY = Math.max(0, minY - margin);
+
+    // Capture content, then resize and redraw at origin
+    const bgT = cloneCanvas(bgCanvas);
+    const drawT = cloneCanvas(drawCanvas);
+    setAllCanvasSize(contentW, contentH);
+    const wrapper = document.getElementById('canvasWrapper');
+    wrapper.style.width = contentW + 'px';
+    wrapper.style.height = contentH + 'px';
+    bgCtx.fillStyle = '#ffffff';
+    bgCtx.fillRect(0, 0, contentW, contentH);
+    bgCtx.drawImage(bgT, srcX, srcY, contentW, contentH, 0, 0, contentW, contentH);
+    drawCtx.clearRect(0, 0, contentW, contentH);
+    drawCtx.drawImage(drawT, srcX, srcY, contentW, contentH, 0, 0, contentW, contentH);
+    composite();
+    updateSizeInputs(contentW, contentH);
+    saveState();
+  }
+  clearSelection();
+}
 function showResizeImageModal() {
   if (!selection.active || selection.w < 2 || selection.h < 2) { alert('Make a selection first (S tool)'); return; }
   const sw = Math.round(selection.w), sh = Math.round(selection.h);
@@ -1091,6 +1428,91 @@ function doResizeSelection() {
   saveState();
 }
 
+// ─── Inline Resize Controls (top banner) ─────────────────────────
+let ratioLocked = true;
+let selOrigW = 0, selOrigH = 0;
+
+function enableResizeControls() {
+  const ctrl = document.getElementById('resizeSelControls');
+  const label = document.getElementById('resizeSelLabel');
+  ctrl.style.opacity = '1';
+  ctrl.style.pointerEvents = 'auto';
+  label.style.opacity = '1';
+  const sw = Math.round(selection.w), sh = Math.round(selection.h);
+  selOrigW = sw; selOrigH = sh;
+  document.getElementById('riW2').value = sw;
+  document.getElementById('riH2').value = sh;
+  document.getElementById('resizePercent').value = '';
+}
+
+function disableResizeControls() {
+  const ctrl = document.getElementById('resizeSelControls');
+  const label = document.getElementById('resizeSelLabel');
+  ctrl.style.opacity = '0.4';
+  ctrl.style.pointerEvents = 'none';
+  label.style.opacity = '0.4';
+}
+
+function toggleRatioLock() {
+  ratioLocked = !ratioLocked;
+  const btn = document.getElementById('ratioLockBtn');
+  btn.textContent = ratioLocked ? '🔗' : '↔️';
+  btn.title = ratioLocked ? 'Proportional — click to unlock' : 'Free resize — click to lock';
+  btn.style.color = ratioLocked ? '#cba6f7' : '#999';
+}
+
+// W input changes
+document.getElementById('riW2').addEventListener('input', function() {
+  if (!ratioLocked || selOrigW === 0) return;
+  const nw = parseInt(this.value) || 1;
+  const nh = Math.round(nw * (selOrigH / selOrigW));
+  document.getElementById('riH2').value = nh;
+});
+
+// H input changes
+document.getElementById('riH2').addEventListener('input', function() {
+  if (!ratioLocked || selOrigH === 0) return;
+  const nh = parseInt(this.value) || 1;
+  const nw = Math.round(nh * (selOrigW / selOrigH));
+  document.getElementById('riW2').value = nw;
+});
+
+function applyResizePercent() {
+  const pct = parseInt(document.getElementById('resizePercent').value);
+  if (!pct || selOrigW === 0) return;
+  const nw = Math.round(selOrigW * pct / 100);
+  const nh = Math.round(selOrigH * pct / 100);
+  document.getElementById('riW2').value = nw;
+  document.getElementById('riH2').value = nh;
+}
+
+function applyInlineResize() {
+  const nw = parseInt(document.getElementById('riW2').value);
+  const nh = parseInt(document.getElementById('riH2').value);
+  if (!selection.active || nw < 1 || nh < 1) { alert('Make a selection first'); return; }
+
+  const sx = Math.round(selection.x), sy = Math.round(selection.y);
+  const sw = Math.round(selection.w), sh = Math.round(selection.h);
+
+  const selCanvas = document.createElement('canvas');
+  selCanvas.width = sw; selCanvas.height = sh;
+  selCanvas.getContext('2d').drawImage(mainCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+  const scaledCanvas = highQualityResizeCanvas(selCanvas, nw, nh);
+
+  bgCtx.fillStyle = '#ffffff'; bgCtx.fillRect(sx, sy, sw, sh);
+  drawCtx.clearRect(sx, sy, sw, sh);
+  bgCtx.drawImage(scaledCanvas, sx, sy);
+  composite();
+
+  selection = { active: true, x: sx, y: sy, w: nw, h: nh };
+  selOrigW = nw; selOrigH = nh;
+  updateSelectionUI();
+  updateResizeSelBtns();
+  saveState();
+
+  document.getElementById('resizePercent').value = '';
+}
+
 // Multi-step downsampling for best quality resize
 function highQualityResizeCanvas(source, dw, dh) {
   let cur = source, cw = source.width, ch = source.height;
@@ -1123,6 +1545,10 @@ function resizeCanvasOnly(w,h) {
   setAllCanvasSize(w,h);
   bgCtx.fillStyle='#ffffff'; bgCtx.fillRect(0,0,w,h); bgCtx.drawImage(bgT,0,0);
   drawCtx.clearRect(0,0,w,h); drawCtx.drawImage(drawT,0,0);
+  // Keep wrapper CSS in sync so canvas is never clipped
+  const wrapper = document.getElementById('canvasWrapper');
+  wrapper.style.width = w + 'px';
+  wrapper.style.height = h + 'px';
   composite(); updateSizeInputs(w,h); saveState();
 }
 
@@ -1145,7 +1571,7 @@ function clearCanvas() {
 // ─── Helpers ──────────────────────────────────────────────────────
 function getVal(id) { return parseInt(document.getElementById(id).value); }
 function updateStatus() {
-  const n={brush:'Brush',eraser:'Eraser',line:'Line',rect:'Rectangle',ellipse:'Ellipse',select:'Select',highlight:'Highlighter',fill:'Fill',eyedropper:'Eyedropper',text:'Text'};
+  const n={brush:'Brush',eraser:'Eraser',line:'Line',arrow:'Arrow',curve:'Curve',rect:'Rectangle',ellipse:'Ellipse',select:'Select',highlight:'Highlighter',fill:'Fill',eyedropper:'Eyedropper',text:'Text',comment:'Comment'};
   document.getElementById('statusTool').textContent = n[currentTool]||currentTool;
   document.getElementById('statusSize').textContent = `${mainCanvas.width} × ${mainCanvas.height}`;
 }
@@ -1184,7 +1610,7 @@ function bindEvents() {
     if (e.key==='Delete') deleteSelection();
     if (e.key==='Escape') { commitFloatingPaste(); commitTextInput(); }
     if (!ctrl&&!e.altKey) {
-      const map={b:'brush',e:'eraser',l:'line',r:'rect',o:'ellipse',s:'select',h:'highlight',f:'fill',i:'eyedropper',t:'text'};
+      const map={b:'brush',e:'eraser',l:'line',r:'rect',o:'ellipse',s:'select',h:'highlight',f:'fill',i:'eyedropper',t:'text',c:'comment'};
       if (map[e.key]) document.querySelector(`[data-tool="${map[e.key]}"]`).click();
     }
   });
@@ -1199,7 +1625,9 @@ function bindEvents() {
         e.preventDefault();
         const blob = item.getAsFile();
         const img = new Image();
-        img.onload = () => createFloatingPaste(img, 10, 10, img.width, img.height);
+        img.onload = () => {
+          createFloatingPaste(img, 10, 10, img.width, img.height);
+        };
         img.src = URL.createObjectURL(blob);
         return;
       }
